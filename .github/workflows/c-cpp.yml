@@ -21,13 +21,26 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
+      - name: Get Latest Windows SDK Version
+        shell: pwsh
+        run: |
+          # Finds the latest 10.x or 11.x SDK build number installed on the runner
+          $sdk = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" | 
+                  Where-Object { $_.Name -match '^10\.' } | 
+                  Sort-Object Name -Descending | 
+                  Select-Object -First 1).Name
+          
+          if (-not $sdk) { throw "No Windows 10/11 SDK found on runner" }
+          echo "LATEST_SDK=$sdk" >> $env:GITHUB_ENV
+          echo "Detected SDK: $sdk"
+
       - name: Build Solution
         run: |
           msbuild ElasticTabstops.sln `
             /m `
             /p:Configuration="${{ matrix.configuration }}" `
             /p:Platform="${{ matrix.platform }}" `
-            /p:WindowsTargetPlatformVersion="10.0" `
+            /p:WindowsTargetPlatformVersion="${{ env.LATEST_SDK }}" `
             /p:PlatformToolset="v141"
 
       - name: Prepare Paths
