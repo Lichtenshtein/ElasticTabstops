@@ -324,7 +324,8 @@ public:
     //std::cout<<"  Result = "<<int(res)<<"file from BufID: \""<<fname<<"\"\n";
     if(!fname[0]) return;
     int idx=FindFile(fname);
-    if(idx==-1) { ::MessageBox(nppData._nppHandle, _T("Closing file wasn't registed"), _T("Warning"), MB_OK|MB_ICONWARNING); return; }
+    // if(idx==-1) { ::MessageBox(nppData._nppHandle, _T("Closing file wasn't registed"), _T("Warning"), MB_OK|MB_ICONWARNING); return; }
+    if(idx==-1) { return; }
     for(int i=0; i<2; i++)
       if(fgIdx[i]!=-1)
       {
