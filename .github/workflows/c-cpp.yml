@@ -1,23 +1,66 @@
-name: C/C++ CI
+name: Build ElasticTabstops
 
 on:
-  push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
+    runs-on: windows-2019
 
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, Win32]
+        configuration: [Release]
+        # configuration: [Release, Debug]
 
     steps:
-    - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Solution
+        run: |
+          msbuild ElasticTabstops.sln `
+            /m `
+            /p:Configuration="${{ matrix.configuration }}" `
+            /p:Platform="${{ matrix.platform }}"
+
+      - name: Prepare Paths
+        shell: pwsh
+        run: |
+          $BuildPath = "bin\${{ matrix.configuration }}_${{ matrix.platform }}"
+          echo "DLL_PATH=$BuildPath\ElasticTabstops.dll" >> $env:GITHUB_ENV
+
+      - name: Upload Raw DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: ElasticTabstops-${{ matrix.platform }}-${{ matrix.configuration }}
+          path: ${{ env.DLL_PATH }}
+
+      - name: Create Release Zip
+        if: startsWith(github.ref, 'refs/tags/') && matrix.configuration == 'Release'
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          # Matches your naming logic: x64 gets suffix, Win32 does not
+          if ("${{ matrix.platform }}" -eq "x64") {
+            $zipName = "ElasticTabstops_$($tag)_x64.zip"
+          } else {
+            $zipName = "ElasticTabstops_$($tag).zip"
+          }
+          
+          7z a $zipName "${{ env.DLL_PATH }}"
+          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+      - name: GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') && matrix.configuration == 'Release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP_NAME }}
+          draft: true
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
