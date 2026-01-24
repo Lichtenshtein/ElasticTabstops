@@ -2,6 +2,9 @@
 
 Notepad++ plugin for [Elastic Tabstops](http://nickgravgaard.com/elastic-tabstops/).
 
+Fix based on this [solution]( https://github.com/mariusv-github/ElasticTabstops/issues/2#issuecomment-1953959469).
+Added github builder.
+
 New version 1.5 (for Notepad++ version higher than 8.4.4) rewritten, optimized, and providing many new features:
 * New settings architecture: default setting and individual settings.
 * New configuration file format, INI-compatible, with optional individual sections for edited files.
