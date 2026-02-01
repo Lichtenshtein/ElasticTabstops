@@ -1,6 +1,9 @@
 name: Build ElasticTabstops
 
 on:
+#  push:
+#    branches: [ main ]
+#    tags: [ 'v*' ]
   workflow_dispatch:
 
 jobs:
@@ -43,39 +46,48 @@ jobs:
             /p:WindowsTargetPlatformVersion="${{ env.LATEST_SDK }}" `
             /p:PlatformToolset="v141"
 
-      - name: Prepare Paths
+      - name: Prepare Artifacts
         shell: pwsh
         run: |
-          $BuildPath = "bin\${{ matrix.configuration }}_${{ matrix.platform }}"
-          echo "DLL_PATH=$BuildPath\ElasticTabstops.dll" >> $env:GITHUB_ENV
+          $dllPath = "bin\${{ matrix.configuration }}_${{ matrix.platform }}\ElasticTabstops.dll"
+          
+          $tagName = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "latest-build" }
+          
+          if ("${{ matrix.platform }}" -eq "x64") {
+            $archiveName = "ElasticTabstops_$($tagName)_x64.7z"
+          } else {
+            $archiveName = "ElasticTabstops_$($tagName).7z"
+          }
 
-      - name: Upload Raw DLL
+          7z a -t7z -mx9 $archiveName $dllPath
+
+          echo "ARCHIVE_NAME=$archiveName" >> $env:GITHUB_ENV
+          echo "RELEASE_TAG=$tagName" >> $env:GITHUB_ENV
+
+      - name: Upload Artifact (Workflow)
         uses: actions/upload-artifact@v4
         with:
           name: ElasticTabstops-${{ matrix.platform }}-${{ matrix.configuration }}
-          path: ${{ env.DLL_PATH }}
+          path: ${{ env.ARCHIVE_NAME }}
+          retention-days: 1
 
-      - name: Create Release Zip
-        if: startsWith(github.ref, 'refs/tags/') && matrix.configuration == 'Release'
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          # Matches your naming logic: x64 gets suffix, Win32 does not
-          if ("${{ matrix.platform }}" -eq "x64") {
-            $zipName = "ElasticTabstops_$($tag)_x64.zip"
-          } else {
-            $zipName = "ElasticTabstops_$($tag).zip"
-          }
-          
-          7z a $zipName "${{ env.DLL_PATH }}"
-          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+      - name: Delete Old Release (Auto-builds only)
+        # if: github.ref_type != 'tag' && matrix.platform == 'x64' && github.event_name == 'push'
+        if: matrix.platform == 'x64'
+        uses: dev-drprasad/delete-tag-and-release@v1.1
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          delete_release: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') && matrix.configuration == 'Release'
+        # if: github.event_name == 'push' && matrix.configuration == 'Release'
+        if: matrix.configuration == 'Release'
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.ZIP_NAME }}
-          draft: true
-          prerelease: false
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: ${{ env.ARCHIVE_NAME }}
+          generate_release_notes: true
+          prerelease: ${{ github.ref_type != 'tag' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
