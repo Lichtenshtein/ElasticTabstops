@@ -67,13 +67,31 @@ jobs:
       - name: Upload Artifact (Workflow)
         uses: actions/upload-artifact@v4
         with:
-          name: ElasticTabstops-${{ matrix.platform }}-${{ matrix.configuration }}
+          name: artifacts-${{ matrix.platform }}
           path: ${{ env.ARCHIVE_NAME }}
           retention-days: 1
 
+  publish:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          merge-multiple: true
+
+      - name: Set Release Tag
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "RELEASE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
+          else
+            echo "RELEASE_TAG=latest-build" >> $GITHUB_ENV
+          fi
+
       - name: Delete Old Release (Auto-builds only)
-        # if: github.ref_type != 'tag' && matrix.platform == 'x64' && github.event_name == 'push'
-        if: matrix.platform == 'x64'
+        if: github.ref_type != 'tag'
         uses: dev-drprasad/delete-tag-and-release@v1.1
         with:
           tag_name: ${{ env.RELEASE_TAG }}
@@ -81,12 +99,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: GitHub Release
-        # if: github.event_name == 'push' && matrix.configuration == 'Release'
-        if: matrix.configuration == 'Release'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          files: ${{ env.ARCHIVE_NAME }}
+          files: "*.7z"
           generate_release_notes: true
           prerelease: ${{ github.ref_type != 'tag' }}
         env:
